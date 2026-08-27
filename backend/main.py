@@ -189,7 +189,7 @@ def _execute(parsed_query: dict[str, Any], query: str, target_row_id: Optional[i
             raise ValueError("An employee id is required for this query")
         params["id"] = row_id
 
-    if operation == "SELECT" and row_id is not None and ":id" not in sql and row_key:
+    if operation in {"SELECT", "UPDATE"} and row_id is not None and ":id" not in sql and row_key and " where " not in sql.lower():
         sql += f" WHERE {row_key} = :id"
         params["id"] = row_id
 
@@ -212,9 +212,15 @@ def _execute(parsed_query: dict[str, Any], query: str, target_row_id: Optional[i
         if column == "salary":
             match = re.search(r"\bsalary\s*(?:to|=)\s*\$?(\d+)\b", query, re.IGNORECASE)
             params[column] = int(match.group(1)) if match else None
+        elif column in {"Monthly_Income", "Performance_Rating", "Job_Satisfaction", "Age", "Years_At_Company"}:
+            column_phrase = re.escape(column).replace("_", r"(?:[_\s]+)")
+            match = re.search(rf"\b{column_phrase}\s*(?:to|=|as)\s+\$?['\"]?(\d+(?:\.\d+)?)", query, re.IGNORECASE)
+            match = match or re.search(r"\bto\s+\$?['\"]?(\d+(?:\.\d+)?)", query, re.IGNORECASE)
+            params[column] = float(match.group(1)) if match and "." in match.group(1) else int(match.group(1)) if match else None
         else:
+            column_phrase = re.escape(column).replace("_", r"(?:[_\s]+)")
             match = re.search(
-                rf"\b{re.escape(column)}\s*(?:to|=|as)\s+['\"]?([^,.;]+)",
+                rf"\b{column_phrase}\s*(?:to|=|as)\s+['\"]?([^,.;]+)",
                 query,
                 re.IGNORECASE,
             )
@@ -249,13 +255,21 @@ def _trace(parsed_query: dict, policy: dict, database_status: str | None = None,
         {"step": "query_received", "label": "Query Received", "status": "success"},
         {"step": "authentication", "label": "Authentication", "status": "success", "agent_id": None},
         {"step": "llm_interpreter", "label": "LLM Interpreter", "status": "success", "parsed_query": parsed_query},
-        {"step": "policy_engine", "label": "Policy Engine", "status": "success", "decision": policy["decision"], "risk_score": policy["risk_score"], "reasons": policy["reasons"]},
+        {"step": "policy_engine", "label": "Policy Engine", "status": "denied" if policy["decision"] == "DENY" else "success", "decision": policy["decision"], "risk_score": policy["risk_score"], "reasons": policy["reasons"]},
         {"step": "decision", "label": "Decision", "status": policy["decision"].lower(), "decision": policy["decision"]},
     ]
     if database_status:
         steps.append({"step": "database", "label": "Database", "status": database_status})
     steps.append({"step": "audit_log", "label": "Audit Log", "status": audit_status})
     return steps
+
+
+def _approval_trace(pending: dict, decision: str, database_status: str):
+    trace = _trace(pending["parsed_query"], pending["policy"], database_status)
+    trace[3]["status"] = "success"
+    trace[4]["status"] = decision.lower()
+    trace[4]["decision"] = decision
+    return trace
 
 
 def _audit_entry(request: AgentQueryRequest, policy: dict, result: dict):
@@ -576,6 +590,7 @@ def review_approval(approval_id: int, review: ApprovalRequest):
             _update_audit_entry(pending["audit_id"], rejected_policy, rejected_result)
         else:
             _audit_entry(original_request, rejected_policy, rejected_result)
+        pending["trace"] = _approval_trace(pending, "REJECTED", "blocked")
         return pending
 
     try:
@@ -589,6 +604,7 @@ def review_approval(approval_id: int, review: ApprovalRequest):
             _update_audit_entry(pending["audit_id"], approved_policy, approved_result)
         else:
             _audit_entry(original_request, approved_policy, approved_result)
+        pending["trace"] = _approval_trace(pending, "APPROVED", "success")
     except Exception as exc:
         pending["status"] = "execution_error"
         pending["result"] = {"error": str(exc)}
@@ -597,6 +613,7 @@ def review_approval(approval_id: int, review: ApprovalRequest):
             _update_audit_entry(pending["audit_id"], pending["policy"], error_result)
         else:
             _audit_entry(original_request, pending["policy"], error_result)
+        pending["trace"] = _approval_trace(pending, "APPROVED", "failed")
     return pending
 
 

@@ -86,6 +86,15 @@ def evaluate(agent_id, parsed_query):
             [],
         )
 
+    aggregate_only_row_access = set(columns) & policy["aggregate_only_columns"]
+    if operation == "SELECT" and not is_aggregate and aggregate_only_row_access:
+        return _result(
+            "DENY",
+            10,
+            ["Row-level access is denied; column(s) are available only through aggregate queries: " + ", ".join(sorted(aggregate_only_row_access))],
+            [],
+        )
+
     reasons = []
     redact_columns = []
     risk_score = 0
@@ -96,12 +105,6 @@ def evaluate(agent_id, parsed_query):
             reasons.append(f"Column '{column}' is outside the agent allowlist")
         if column in policy["sensitive_columns"] and column not in policy["allowed_columns"]:
             reasons.append(f"Sensitive column '{column}' will be redacted for {agent_id}")
-        if operation == "SELECT" and column in policy["aggregate_only_columns"] and not is_aggregate:
-            if column not in redact_columns:
-                redact_columns.append(column)
-            risk_score += 2
-            reasons.append(f"Column '{column}' is restricted to aggregate queries for {agent_id}")
-
     if operation == "UPDATE":
         unauthorized_updates = set(columns) - policy["update_columns"]
         if unauthorized_updates:

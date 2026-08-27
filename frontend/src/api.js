@@ -1,14 +1,15 @@
 export const API_BASE = "http://127.0.0.1:8000";
-const DEMO_KEY = "4e4e9597bf8e08e728a8b6fd12ab9826";
 
 export async function api(path, options = {}) {
+  const { apiKey, ...requestOptions } = options;
+  const headers = {
+    ...(requestOptions.body ? { "Content-Type": "application/json" } : {}),
+    ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+    ...(requestOptions.headers || {})
+  };
   const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      Authorization: `Bearer ${DEMO_KEY}`,
-      ...(options.headers || {})
-    }
+    ...requestOptions,
+    headers
   });
   const body = await response.json();
   if (!response.ok) throw new Error(body.detail || `API ${response.status}`);
