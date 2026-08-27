@@ -1,0 +1,28 @@
+agents:
+  recruiter_agent:
+    label: "Recruiter Agent"
+    tables:
+      hr_records:
+        allowed_columns: [Employee_ID, Department, Job_Role, Education_Level, Years_At_Company]
+        sensitive_columns: [Monthly_Income, Performance_Rating, Attrition]
+        allowed_ops: [SELECT]
+  hr_analytics_agent:
+    label: "HR Analytics Agent"
+    tables:
+      hr_records:
+        allowed_columns: [Department, Monthly_Income, Performance_Rating, Job_Satisfaction, Attrition]
+        sensitive_columns: [Monthly_Income, Performance_Rating, Job_Satisfaction, Attrition]
+        aggregate_only_columns: [Monthly_Income, Performance_Rating, Job_Satisfaction, Attrition]
+        allowed_ops: [SELECT]
+  senior_hr_agent:
+    label: "Senior HR Agent"
+    tables:
+      hr_records:
+        allowed_columns: [Employee_ID, Department, Job_Role, Education_Level, Monthly_Income, Performance_Rating]
+        sensitive_columns: [Monthly_Income, Performance_Rating, Attrition]
+        row_level_denied_columns: [Attrition]
+        allowed_ops: [SELECT, UPDATE]
+        update_columns: [Monthly_Income, Performance_Rating]
+  rogue_agent:
+    label: "Untrusted Agent"
+    tables: {}

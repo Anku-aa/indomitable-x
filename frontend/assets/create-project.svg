@@ -1,0 +1,23 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="294" height="210" viewBox="0 0 294 210" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Frame 634058">
+<g clip-path="url(#clip0_0_100)">
+<rect id="Rectangle 7573" x="1" y="1" width="292" height="208" rx="5" stroke="url(#paint0_linear_0_100)" stroke-width="2"/>
+<path id="Union" fill-rule="evenodd" clip-rule="evenodd" d="M149.188 47.5C149.188 46.1193 148.068 45 146.688 45C145.307 45 144.188 46.1193 144.188 47.5V92.8125C144.188 98.3353 139.71 102.812 134.188 102.812H89.5C88.1193 102.812 87 103.932 87 105.312C87 106.693 88.1193 107.812 89.5 107.812H134.188C139.71 107.812 144.188 112.29 144.188 117.812V162.5C144.188 163.881 145.307 165 146.688 165C148.068 165 149.188 163.881 149.188 162.5V117.812C149.188 112.29 153.665 107.812 159.188 107.812H204.5C205.881 107.812 207 106.693 207 105.312C207 103.932 205.881 102.812 204.5 102.812H159.188C153.665 102.812 149.188 98.3353 149.188 92.8125V47.5Z" fill="url(#paint1_linear_0_100)"/>
+</g>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_100" x1="35.9802" y1="156.136" x2="266.718" y2="136.184" gradientUnits="userSpaceOnUse">
+<stop stop-color="#604BED"/>
+<stop offset="0.469783" stop-color="#A99CFF"/>
+<stop offset="1" stop-color="#604BED"/>
+</linearGradient>
+<linearGradient id="paint1_linear_0_100" x1="55" y1="165" x2="187.832" y2="167.388" gradientUnits="userSpaceOnUse">
+<stop stop-color="#604BED"/>
+<stop offset="0.469783" stop-color="#A99CFF"/>
+<stop offset="1" stop-color="#604BED"/>
+</linearGradient>
+<clipPath id="clip0_0_100">
+<rect width="294" height="210" rx="6" fill="white"/>
+</clipPath>
+</defs>
+</svg>
