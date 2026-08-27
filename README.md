@@ -30,7 +30,7 @@ Agent / natural-language request
 ```
 
 - `llm.py` converts natural language into `{operation, table, columns, is_aggregate, sql}`. It uses Groq when `GROQ_API_KEY` is present and a zero-configuration keyword parser otherwise.
-- `policy_engine.py` registers five focused roles for the real `hr_records` dataset: `recruiter_agent`, `hr_analytics_agent`, `senior_hr_agent`, `support_agent`, and `rogue_agent`.
+- `policy_engine.py` registers five focused roles for the real `hr_records` dataset: `recruiter_agent`, `hr_analytics_agent`, `senior_hr_agent`, and `rogue_agent`.
 - `main.py` coordinates interpretation, policy decisions, SQLite execution, redaction, the in-memory approval queue, and the audit log.
 - `db.py` defaults to the loaded `hr_records` database. The original five-row `employees` seed path remains available only when a different database URL is selected.
 - `db.py` discovers governed table columns dynamically using SQLite `PRAGMA table_info` or PostgreSQL `information_schema`.

@@ -194,7 +194,12 @@ def _execute(parsed_query: dict[str, Any], query: str, target_row_id: Optional[i
         params["id"] = row_id
 
     if operation == "SELECT" and "department" in {column.lower() for column in parsed_query["columns"]} and " where " not in sql.lower():
-        department_match = re.search(r"\b(?:in|from)\s+(?:the\s+)?([A-Za-z][A-Za-z0-9 &-]*)\s+department\b", query, re.IGNORECASE)
+        department_match = re.search(
+            r"\b(?:in|from)\s+(?:the\s+)?([A-Za-z][A-Za-z0-9 &-]*?)(?:\s+department)?"
+            r"(?:\s+(?:and|their|with|where)|[?.!,]|$)",
+            query,
+            re.IGNORECASE,
+        )
         if department_match:
             sql += " WHERE Department = :department_filter"
             params["department_filter"] = department_match.group(1).strip()
@@ -236,6 +241,21 @@ def _redact(result: dict, redact_columns: list[str]):
                 row_copy[column] = "***REDACTED***"
         redacted.append(row_copy)
     return {**result, "rows": redacted}
+
+
+def _trace(parsed_query: dict, policy: dict, database_status: str | None = None, audit_status: str = "success"):
+    """Describe the real request lifecycle for the observability UI."""
+    steps = [
+        {"step": "query_received", "label": "Query Received", "status": "success"},
+        {"step": "authentication", "label": "Authentication", "status": "success", "agent_id": None},
+        {"step": "llm_interpreter", "label": "LLM Interpreter", "status": "success", "parsed_query": parsed_query},
+        {"step": "policy_engine", "label": "Policy Engine", "status": "success", "decision": policy["decision"], "risk_score": policy["risk_score"], "reasons": policy["reasons"]},
+        {"step": "decision", "label": "Decision", "status": policy["decision"].lower(), "decision": policy["decision"]},
+    ]
+    if database_status:
+        steps.append({"step": "database", "label": "Database", "status": database_status})
+    steps.append({"step": "audit_log", "label": "Audit Log", "status": audit_status})
+    return steps
 
 
 def _audit_entry(request: AgentQueryRequest, policy: dict, result: dict):
@@ -371,8 +391,13 @@ def agent_query(request: AgentQueryRequest, api_key: str = Depends(require_api_k
     policy = evaluate(request.agent_id, parsed_query)
     resolved_target_row_id = _extract_id(request.query, request.target_row_id)
 
+    def lifecycle(database_status=None):
+        trace = _trace(parsed_query, policy, database_status)
+        trace[1]["agent_id"] = request.agent_id
+        return trace
+
     if policy["decision"] == "DENY":
-        result = {"status": "denied", "parsed_query": parsed_query}
+        result = {"status": "denied", "parsed_query": parsed_query, "trace": lifecycle("blocked")}
         _audit_entry(request, policy, result)
         return result
 
@@ -390,6 +415,7 @@ def agent_query(request: AgentQueryRequest, api_key: str = Depends(require_api_k
                         "status": "pending_approval",
                         "approval_id": existing_id,
                         "duplicate": True,
+                        "trace": lifecycle("pending_approval"),
                     }
                     return result
 
@@ -405,7 +431,7 @@ def agent_query(request: AgentQueryRequest, api_key: str = Depends(require_api_k
             }
             PENDING_APPROVALS[approval_id] = pending
             PENDING_CREATED_AT[approval_id] = now
-            result = {"status": "pending_approval", "approval_id": approval_id}
+            result = {"status": "pending_approval", "approval_id": approval_id, "trace": lifecycle("pending_approval")}
         audit_record = _audit_entry(request, policy, result)
         pending["audit_id"] = audit_record["id"]
         return result
@@ -413,9 +439,9 @@ def agent_query(request: AgentQueryRequest, api_key: str = Depends(require_api_k
     try:
         executed = _execute(parsed_query, request.query, resolved_target_row_id)
         executed = _redact(executed, policy["redact_columns"])
-        result = {"status": "executed", "parsed_query": parsed_query, "result": executed}
+        result = {"status": "executed", "parsed_query": parsed_query, "result": executed, "trace": lifecycle("success")}
     except Exception as exc:
-        result = {"status": "execution_error", "error": str(exc), "parsed_query": parsed_query}
+        result = {"status": "execution_error", "error": str(exc), "parsed_query": parsed_query, "trace": lifecycle("failed")}
     _audit_entry(request, policy, result)
     return result
 
