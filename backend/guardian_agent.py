@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,8 @@ QUARANTINED_AGENTS: set[str] = set()
 QUARANTINE_REASONS: dict[str, str] = {}
 RECENT_ACTIVITY_LIMIT = 20
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+ADAPTIVE_RISK_RESTRICT_THRESHOLD = int(os.getenv("ADAPTIVE_RISK_RESTRICT_THRESHOLD", "8"))
+ADAPTIVE_RISK_WINDOW_SECONDS = int(os.getenv("ADAPTIVE_RISK_WINDOW_SECONDS", "60"))
 
 _GROQ_MODEL = "llama-3.3-70b-versatile"
 _GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -48,6 +51,114 @@ def _json_value(value, default):
         return json.loads(value)
     except (TypeError, json.JSONDecodeError):
         return default
+
+
+def _risk_level(score: int, quarantined: bool = False) -> str:
+    if quarantined:
+        return "QUARANTINED"
+    if score >= ADAPTIVE_RISK_RESTRICT_THRESHOLD:
+        return "RESTRICTED"
+    if score >= 6:
+        return "HIGH"
+    if score >= 3:
+        return "ELEVATED"
+    return "NORMAL"
+
+
+def _risk_factor(entry: dict[str, Any]) -> tuple[int, list[str], bool]:
+    """Return adaptive points, factor labels, and whether sensitive data was targeted."""
+    decision = entry.get("decision")
+    policy_risk = entry.get("risk_score") or 0
+    redact_columns = _json_value(entry.get("redact_columns"), [])
+    result = _json_value(entry.get("result"), {})
+    parsed = result.get("parsed_query", {}) if isinstance(result, dict) else {}
+    requested = set(parsed.get("columns", []))
+    targeted = sorted((requested | set(redact_columns)) & sensitive_columns())
+    sensitive = bool(targeted)
+    points = 0
+    factors = []
+    if decision == "DENY":
+        points += 1
+        factors.append("denied request")
+    if sensitive:
+        points += 2
+        factors.append("sensitive-data attempt: " + ", ".join(targeted))
+    if policy_risk >= 6 or parsed.get("operation") in {"DELETE", "UPDATE"} or sensitive:
+        points += 1
+        factors.append("high-risk operation")
+    return points, factors, sensitive
+
+
+def agent_risk_snapshot(agent_id: str, limit: int = RECENT_ACTIVITY_LIMIT) -> dict[str, Any]:
+    """Build an agent's runtime risk state from real audit entries."""
+    with get_conn() as connection:
+        rows = connection.execute(
+            text("""
+                SELECT ts, agent_id, nl_query, decision, risk_score,
+                       redact_columns, reasons, result, status
+                FROM audit_log
+                WHERE agent_id = :agent_id
+                ORDER BY ts ASC, id ASC
+            """),
+            {"agent_id": agent_id},
+        ).fetchall()
+
+    # Keep the score responsive to current behavior. Older audit evidence remains
+    # immutable and visible, but it should not permanently poison privileges.
+    cutoff = time.time() - ADAPTIVE_RISK_WINDOW_SECONDS
+    entries = [dict(row._mapping) for row in rows if (row._mapping["ts"] or 0) >= cutoff][-limit:]
+    denied_requests = sum(1 for entry in entries if entry["decision"] == "DENY")
+    sensitive_attempts = 0
+    high_risk_requests = 0
+    score = 1 if entries else 0
+    factors: list[str] = []
+    violations: list[dict[str, Any]] = []
+    for entry in entries:
+        points, entry_factors, sensitive = _risk_factor(entry)
+        score += points
+        sensitive_attempts += int(sensitive)
+        high_risk_requests += int((entry.get("risk_score") or 0) >= 6)
+        if entry_factors:
+            factors.extend(entry_factors)
+            violations.append({
+                "timestamp": entry["ts"],
+                "query": entry["nl_query"],
+                "decision": entry["decision"],
+                "reasons": _json_value(entry.get("reasons"), []),
+                "factors": entry_factors,
+            })
+
+    # Repeated denials are an escalation signal, independent of YAML policy.
+    if denied_requests >= 3:
+        score += 2
+        factors.append("repeated denied requests")
+    score = min(10, score)
+    recent_factors = list(dict.fromkeys(factors))[-6:]
+    status = _risk_level(score, agent_id in QUARANTINED_AGENTS)
+    reason = recent_factors[-1] if recent_factors else "No behavioral risk indicators observed"
+    if status == "RESTRICTED":
+        reason = "; ".join(recent_factors[-3:]) or "Adaptive risk threshold exceeded"
+    return {
+        "agent_id": agent_id,
+        "risk_score": score,
+        "risk_level": status,
+        "status": status,
+        "denied_requests": denied_requests,
+        "sensitive_attempts": sensitive_attempts,
+        "high_risk_requests": high_risk_requests,
+        "recent_violations": list(reversed(violations[-5:])),
+        "risk_factors": recent_factors,
+        "reason": reason,
+        "privilege_state": "QUARANTINED" if agent_id in QUARANTINED_AGENTS else "RESTRICTED" if status == "RESTRICTED" else "POLICY PRIVILEGES",
+        "restrict_threshold": ADAPTIVE_RISK_RESTRICT_THRESHOLD,
+        "window_size": len(entries),
+        "window_seconds": ADAPTIVE_RISK_WINDOW_SECONDS,
+    }
+
+
+def all_agent_risk_snapshots() -> list[dict[str, Any]]:
+    from policy_engine import AGENT_ROLES
+    return [agent_risk_snapshot(agent_id) for agent_id in AGENT_ROLES]
 
 
 def _activity_summary(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:

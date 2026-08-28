@@ -21,10 +21,12 @@ from sqlalchemy import text
 from auth import AGENT_KEYS, verify_key
 from db import get_engine, get_conn, get_table_schema, init_db
 from llm import extract_target_row_id, interpret
-from policy_engine import AGENT_ROLES, evaluate
+from policy_engine import AGENT_ROLES, apply_adaptive_risk, evaluate
 from guardian_agent import (
     QUARANTINED_AGENTS,
     QUARANTINE_REASONS,
+    agent_risk_snapshot,
+    all_agent_risk_snapshots,
     analyze_recent_activity,
 )
 from compliance_agent import generate_pdf, generate_report
@@ -255,7 +257,7 @@ def _trace(parsed_query: dict, policy: dict, database_status: str | None = None,
         {"step": "query_received", "label": "Query Received", "status": "success"},
         {"step": "authentication", "label": "Authentication", "status": "success", "agent_id": None},
         {"step": "llm_interpreter", "label": "LLM Interpreter", "status": "success", "parsed_query": parsed_query},
-        {"step": "policy_engine", "label": "Policy Engine", "status": "denied" if policy["decision"] == "DENY" else "success", "decision": policy["decision"], "risk_score": policy["risk_score"], "reasons": policy["reasons"]},
+        {"step": "policy_engine", "label": "Policy / Risk", "status": "denied" if policy["decision"] == "DENY" else "success", "decision": policy["decision"], "risk_score": policy["risk_score"], "adaptive_risk_score": policy.get("adaptive_risk_score", 0), "adaptive_risk_level": policy.get("adaptive_risk_level", "NORMAL"), "reasons": policy["reasons"]},
         {"step": "decision", "label": "Decision", "status": policy["decision"].lower(), "decision": policy["decision"]},
     ]
     if database_status:
@@ -402,7 +404,11 @@ def agent_query(request: AgentQueryRequest, api_key: str = Depends(require_api_k
         )
 
     parsed_query = interpret(request.query)
-    policy = evaluate(request.agent_id, parsed_query)
+    policy = apply_adaptive_risk(
+        evaluate(request.agent_id, parsed_query),
+        parsed_query,
+        agent_risk_snapshot(request.agent_id),
+    )
     resolved_target_row_id = _extract_id(request.query, request.target_row_id)
 
     def lifecycle(database_status=None):
@@ -411,8 +417,9 @@ def agent_query(request: AgentQueryRequest, api_key: str = Depends(require_api_k
         return trace
 
     if policy["decision"] == "DENY":
-        result = {"status": "denied", "parsed_query": parsed_query, "trace": lifecycle("blocked")}
+        result = {"status": "denied", "parsed_query": parsed_query, "adaptive_risk": agent_risk_snapshot(request.agent_id), "trace": lifecycle("blocked")}
         _audit_entry(request, policy, result)
+        result["adaptive_risk"] = agent_risk_snapshot(request.agent_id)
         return result
 
     if policy["decision"] == "REQUIRE_APPROVAL":
@@ -448,15 +455,17 @@ def agent_query(request: AgentQueryRequest, api_key: str = Depends(require_api_k
             result = {"status": "pending_approval", "approval_id": approval_id, "trace": lifecycle("pending_approval")}
         audit_record = _audit_entry(request, policy, result)
         pending["audit_id"] = audit_record["id"]
+        result["adaptive_risk"] = agent_risk_snapshot(request.agent_id)
         return result
 
     try:
         executed = _execute(parsed_query, request.query, resolved_target_row_id)
         executed = _redact(executed, policy["redact_columns"])
-        result = {"status": "executed", "parsed_query": parsed_query, "result": executed, "trace": lifecycle("success")}
+        result = {"status": "executed", "parsed_query": parsed_query, "result": executed, "adaptive_risk": agent_risk_snapshot(request.agent_id), "trace": lifecycle("success")}
     except Exception as exc:
-        result = {"status": "execution_error", "error": str(exc), "parsed_query": parsed_query, "trace": lifecycle("failed")}
+        result = {"status": "execution_error", "error": str(exc), "parsed_query": parsed_query, "adaptive_risk": agent_risk_snapshot(request.agent_id), "trace": lifecycle("failed")}
     _audit_entry(request, policy, result)
+    result["adaptive_risk"] = agent_risk_snapshot(request.agent_id)
     return result
 
 
@@ -513,14 +522,14 @@ def guardian_run():
 
 @app.get("/guardian/status")
 def guardian_status():
-    agent_status = [
-        {
-            "agent_id": agent_id,
-            "status": "quarantined" if agent_id in QUARANTINED_AGENTS else "clear",
-            "reasoning": QUARANTINE_REASONS.get(agent_id, ""),
-        }
-        for agent_id in AGENT_ROLES
-    ]
+    agent_status = []
+    for snapshot in all_agent_risk_snapshots():
+        agent_id = snapshot["agent_id"]
+        agent_status.append({
+            **snapshot,
+            "status": "quarantined" if agent_id in QUARANTINED_AGENTS else "restricted" if snapshot["risk_level"] == "RESTRICTED" else "clear",
+            "reasoning": QUARANTINE_REASONS.get(agent_id, snapshot["reason"]),
+        })
     return {
         "quarantined_agents": [
             {"agent_id": agent_id, "reasoning": QUARANTINE_REASONS.get(agent_id, "")}
@@ -528,6 +537,11 @@ def guardian_status():
         ],
         "agents": agent_status,
     }
+
+
+@app.get("/agent-risk")
+def agent_risk():
+    return {"agents": all_agent_risk_snapshots()}
 
 
 @app.post("/guardian/lift/{agent_id}")

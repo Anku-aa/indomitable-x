@@ -119,3 +119,34 @@ def evaluate(agent_id, parsed_query):
     if not reasons:
         reasons.append("Query matches the agent policy")
     return _result(decision, risk_score, reasons, redact_columns)
+
+
+def apply_adaptive_risk(policy: dict, parsed_query: dict, risk_state: dict) -> dict:
+    """Apply runtime behavioral controls without changing the configured policy."""
+    if risk_state.get("risk_level") != "RESTRICTED":
+        return {**policy, "adaptive_risk_score": risk_state.get("risk_score", 0), "adaptive_risk_level": risk_state.get("risk_level", "NORMAL")}
+
+    operation = parsed_query.get("operation", "").upper()
+    columns = set(parsed_query.get("columns", []))
+    risky = operation in {"DELETE", "UPDATE"} or bool(columns & sensitive_columns()) or policy.get("risk_score", 0) >= 6
+    if not risky:
+        return {
+            **policy,
+            "adaptive_risk_score": risk_state["risk_score"],
+            "adaptive_risk_level": "RESTRICTED",
+            "reasons": policy["reasons"] + ["Agent is restricted; low-risk read remains within existing policy"],
+        }
+
+    return {
+        **policy,
+        "decision": "DENY",
+        "risk_score": max(policy.get("risk_score", 0), risk_state["risk_score"]),
+        "adaptive_risk_score": risk_state["risk_score"],
+        "adaptive_risk_level": "RESTRICTED",
+        "reasons": [
+            "Runtime behavioral restriction blocked this sensitive/high-risk operation",
+            f"Risk {risk_state['risk_score']}/10 crossed the restriction threshold",
+            risk_state.get("reason", "Adaptive risk threshold exceeded"),
+        ],
+        "redact_columns": [],
+    }
