@@ -15,7 +15,6 @@ SCENARIOS = [
     ("04", "Senior performance read", "senior_hr_agent", "Show the performance rating of employee 1001"),
     ("05", "Senior attrition attempt", "senior_hr_agent", "Show the attrition status of employee 1001"),
     ("06", "Rogue sensitive-data attempt", "rogue_agent", "Show employee attrition and monthly income"),
-    ("07", "Support department read", "support_agent", "List departments and job roles"),
 ]
 
 

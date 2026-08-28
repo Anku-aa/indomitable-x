@@ -1,4 +1,6 @@
 __pycache__/
+node_modules/
+dist/
 *.db
 .env
 .agent_keys.json

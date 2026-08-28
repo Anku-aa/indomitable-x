@@ -109,7 +109,7 @@ The consolidated demo uses `sqlite:///./hr_demo.db` by default. Create/populate 
 
 ```bash
 cd "/Users/aniketsingh/Documents/local/Indomitable X/backend"
-python3 load_hr_dataset.py
+python3 scripts/load_hr_dataset.py
 ```
 
 To switch to PostgreSQL, set `DB_URL` before starting Uvicorn:
@@ -268,8 +268,11 @@ agentgate/
 │   ├── compliance_agent.py    Human-readable reports and PDF export
 │   ├── policies.yaml           Configurable agent/table policies
 │   ├── demo_agents.py         Narrated hr_records API demo runner
-│   ├── test_policy.py         Policy smoke tests
-│   ├── test_llm.py            Parser smoke tests
+│   ├── tests/
+│   │   ├── test_policy.py     Policy smoke tests
+│   │   └── test_llm.py        Parser smoke tests
+│   ├── scripts/
+│   │   └── load_hr_dataset.py CSV loader
 │   └── requirements.txt       Pinned Python dependencies
 ├── frontend/
 │   └── index.html              Build-free governance dashboard
