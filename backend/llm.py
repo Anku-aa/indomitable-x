@@ -26,12 +26,30 @@ def extract_target_row_id(nl_query):
 
 
 def _schema_map() -> dict[str, list[dict[str, object]]]:
-    return {table: get_table_schema(table) for table in governed_tables()}
+    schemas = {}
+    for table in governed_tables():
+        discovered = get_table_schema(table)
+        if discovered:
+            schemas[table] = discovered
+            continue
+
+        # Keep interpretation deterministic during first boot, before a
+        # governed table has been created or a remote schema is reachable.
+        policy_columns = set()
+        for role in AGENT_ROLES.values():
+            table_policy = role["tables"].get(table)
+            if table_policy:
+                policy_columns.update(table_policy["allowed_columns"])
+                policy_columns.update(table_policy["sensitive_columns"])
+                policy_columns.update(table_policy["row_level_denied_columns"])
+                policy_columns.update(table_policy["aggregate_only_columns"])
+        schemas[table] = [{"name": column, "type": "UNKNOWN"} for column in sorted(policy_columns)]
+    return schemas
 
 
 def _table_for_query(text: str, schemas: dict[str, list[dict[str, object]]]) -> str:
     lowered = text.lower()
-    available = {table: schema for table, schema in schemas.items() if schema}
+    available = {table: schema for table, schema in schemas.items() if table in governed_tables()}
     if not available:
         return ""
     for table in available:
@@ -226,7 +244,7 @@ def _validate_llm_result(result):
         raise ValueError("Groq returned an invalid operation")
     if result["table"] not in governed_tables() or not isinstance(result["columns"], list):
         raise ValueError("Groq returned an invalid governed table or columns value")
-    valid_columns = {str(column["name"]) for column in get_table_schema(result["table"])}
+    valid_columns = {str(column["name"]) for column in _schema_map().get(result["table"], [])}
     if any(column not in valid_columns for column in result["columns"]):
         raise ValueError("Groq returned a column not present in the connected schema")
     if not isinstance(result["is_aggregate"], bool) or not isinstance(result["sql"], str):
