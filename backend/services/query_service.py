@@ -4,9 +4,10 @@ import re
 from typing import Any, Optional
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from db import get_engine, get_table_schema
-from llm import extract_target_row_id
+from llm import _insert_field_value, extract_target_row_id
 from services.audit_service import _json_safe
 
 
@@ -53,6 +54,41 @@ def _execute(parsed_query: dict[str, Any], query: str, target_row_id: Optional[i
         with get_engine().begin() as connection:
             cursor = connection.execute(text(sql), params)
             return {"status": "delete completed", "row_count": cursor.rowcount}
+
+    if operation == "INSERT":
+        required_columns = {"Employee_ID", "Department", "Job_Role"}
+        insert_columns = [str(column) for column in parsed_query.get("columns", [])]
+        if not required_columns.issubset(insert_columns):
+            missing = ", ".join(sorted(required_columns - set(insert_columns)))
+            raise ValueError(f"INSERT is missing required field(s): {missing}")
+        if any(column not in schema_columns for column in insert_columns):
+            raise ValueError("INSERT includes a column not present in the connected schema")
+        params = {}
+        for column in insert_columns:
+            value = _insert_field_value(query, column, schema)
+            if value is None:
+                raise ValueError(f"A value for {column} is required for this insert")
+            if column == "Employee_ID" or column in {"Age", "Years_At_Company", "Years_In_Current_Role", "Job_Satisfaction", "Performance_Rating", "Work_Life_Balance", "Training_Hours_Last_Year", "Last_Promotion_Years_Ago", "Distance_From_Home", "Number_Of_Companies_Worked", "Stock_Option_Level"}:
+                try:
+                    params[column] = int(float(value))
+                except ValueError as exc:
+                    raise ValueError(f"{column} must be numeric") from exc
+            elif column == "Monthly_Income":
+                try:
+                    params[column] = float(value)
+                except ValueError as exc:
+                    raise ValueError("Monthly_Income must be numeric") from exc
+            else:
+                params[column] = value
+        placeholders = ", ".join(f":{column}" for column in insert_columns)
+        column_list = ", ".join(_safe_identifier(column) for column in insert_columns)
+        insert_sql = f"INSERT INTO {table} ({column_list}) VALUES ({placeholders})"
+        try:
+            with get_engine().begin() as connection:
+                connection.execute(text(insert_sql), params)
+        except IntegrityError as exc:
+            raise ValueError("Employee_ID already exists; INSERT rejected safely") from exc
+        return {"status": f"inserted employee {params['Employee_ID']}", "row_count": 1}
 
     if ":id" in sql:
         if row_id is None:

@@ -103,6 +103,30 @@ def _department_filter_value(text: str, schema: list[dict[str, object]]) -> str 
     return match.group(1).strip() if match else None
 
 
+def _insert_field_value(text: str, column: str, schema: list[dict[str, object]]) -> str | None:
+    """Read an explicitly labelled INSERT field without guessing its value."""
+    if column == "Employee_ID":
+        target_id = extract_target_row_id(text)
+        return str(target_id) if target_id is not None else None
+    aliases = {column.lower(), column.lower().replace("_", " ")}
+    if column == "Job_Role":
+        aliases.add("role")
+    alias_pattern = "|".join(re.escape(alias) for alias in sorted(aliases, key=len, reverse=True))
+    known_aliases = []
+    for item in schema:
+        known_aliases.extend([str(item["name"]).lower(), str(item["name"]).lower().replace("_", " ")])
+    stop_pattern = "|".join(
+        re.escape(alias) for alias in sorted(set(known_aliases), key=len, reverse=True) if alias not in aliases
+    )
+    stop = rf"(?=\s*(?:,|\band\s+(?:{stop_pattern})\b|$))" if stop_pattern else r"(?=\s*(?:,|$))"
+    match = re.search(
+        rf"\b(?:{alias_pattern})\b\s*(?:is|=|:|to)?\s*([^,;]+?){stop}",
+        text,
+        re.IGNORECASE,
+    )
+    return match.group(1).strip().strip("'\"") if match else None
+
+
 def _parsed(operation, table, columns, is_aggregate, sql):
     return {"operation": operation, "table": table, "columns": columns, "is_aggregate": is_aggregate, "sql": sql}
 
@@ -117,6 +141,16 @@ def _rule_based_parse(nl_query):
     columns = _columns_in(text, schema)
     if not table:
         return _parsed("SELECT", "", [], False, "SELECT 1;")
+
+    if re.search(r"\b(add|create|insert)\b", lowered) and re.search(r"\b(?:employee|record)\b", lowered):
+        insert_columns = [
+            column for column in all_columns
+            if _insert_field_value(text, column, schema) is not None
+        ]
+        placeholders = ", ".join(f":{column}" for column in insert_columns)
+        column_list = ", ".join(insert_columns)
+        sql = f"INSERT INTO {table} ({column_list}) VALUES ({placeholders});" if insert_columns else f"INSERT INTO {table} DEFAULT VALUES;"
+        return _parsed("INSERT", table, insert_columns, False, sql)
 
     if re.search(r"\b(average|avg|count|sum|minimum|maximum|min|max)\b", lowered):
         if re.search(r"\b(average|avg)\b", lowered):

@@ -77,6 +77,26 @@ def evaluate(agent_id, parsed_query):
     if operation not in policy["allowed_operations"]:
         return _result("DENY", 10, [f"Operation '{operation}' is not allowed for {agent_id}"], [])
 
+    if operation == "INSERT":
+        required_columns = {"Employee_ID", "Department", "Job_Role"}
+        missing_columns = required_columns - set(columns)
+        if missing_columns:
+            return _result(
+                "DENY",
+                0,
+                ["INSERT is missing required field(s): " + ", ".join(sorted(missing_columns))],
+                [],
+            )
+        unauthorized_columns = set(columns) - policy["allowed_columns"]
+        if unauthorized_columns:
+            return _result(
+                "DENY",
+                10,
+                ["INSERT includes columns outside permissions: " + ", ".join(sorted(unauthorized_columns))],
+                [],
+            )
+        return _result("REQUIRE_APPROVAL", 3, ["INSERT requires human approval before database execution"], [])
+
     row_level_denied = set(columns) & policy["row_level_denied_columns"]
     if operation == "SELECT" and not is_aggregate and row_level_denied:
         return _result(
