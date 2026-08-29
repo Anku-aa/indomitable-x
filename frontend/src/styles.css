@@ -56,7 +56,7 @@ position:fixed;
 z-index:100;
 width:10px;
 height:10px;
-border-radius:50%;
+border-radius:20%;
 background:var(--accent);
 pointer-events:none;
 transform:translate(-50%,-50%);

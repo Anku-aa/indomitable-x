@@ -13,8 +13,8 @@ export default function Hero({ query, setQuery, send, loading, selectedAgent, se
           <div className="query-label">// Send governed request</div>
           <div className="agent-picker"><label htmlFor="agent-select">Identity / agent</label><select id="agent-select" value={selectedAgent} onChange={(event) => setSelectedAgent(event.target.value)}>{AGENT_OPTIONS.map((agent) => <option value={agent} key={agent}>{agent}</option>)}</select></div>
           <input className="agent-key" type="password" value={agentKey} onChange={(event) => setAgentKey(event.target.value)} placeholder="Bearer key for selected agent" autoComplete="off" />
-          <textarea value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") send(); }} rows="3" placeholder="Ask your data something..." />
-          <div className="query-row"><span className="query-hint">Key stays local // ⌘ + ENTER</span><button className="lime-button" onClick={send} disabled={loading}>{loading ? "Evaluating..." : "Transmit ↗"}</button></div>
+          <textarea value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key !== "Enter" || event.shiftKey) return; event.preventDefault(); send(); }} rows="3" placeholder="Ask your data something..." />
+          <div className="query-row"><span className="query-hint">Key stays local // ENTER to transmit // SHIFT + ENTER for newline</span><button className="lime-button" onClick={send} disabled={loading}>{loading ? "Evaluating..." : "Transmit ↗"}</button></div>
         </div>
       </section>
       <div className="marquee"><div className="marquee-track">INTERPRET <span>///</span> EVALUATE <span>///</span> REDACT <span>///</span> AUDIT <span>///</span> APPROVE <span>///</span></div></div>
