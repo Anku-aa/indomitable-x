@@ -1,4 +1,4 @@
-"""Run a narrated set of AgentGate demo requests against the local API."""
+"""Run a narrated set of Agenate demo requests against the local API."""
 
 import json
 from urllib.error import HTTPError
@@ -38,7 +38,7 @@ def call(path, method="GET", payload=None, agent_id=None):
 
 def main():
     print("=" * 72)
-    print("AGENTGATE // SCRIPTED GOVERNANCE DEMO")
+    print("AGENATE // SCRIPTED GOVERNANCE DEMO")
     print("=" * 72)
     for number, title, agent_id, query in SCENARIOS:
         response = call(

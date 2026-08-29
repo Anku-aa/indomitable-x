@@ -1,4 +1,4 @@
-"""MCP stdio server for governed AgentGate database access.
+"""MCP stdio server for governed Agenate database access.
 
 The tool handlers call the existing FastAPI endpoint functions directly so
 MCP and REST requests share interpretation, policy, execution, redaction,
@@ -20,8 +20,8 @@ from main import (
 
 
 server = MCPServer(
-    "agentgate",
-    description="AgentGate governed employee database access",
+    "agenate",
+    description="Agenate governed employee database access",
 )
 
 
@@ -29,7 +29,7 @@ def _require_valid_key(api_key: str) -> None:
     if not isinstance(api_key, str) or not any(
         verify_key(agent_id, api_key) for agent_id in AGENT_KEYS
     ):
-        raise ValueError("Invalid or missing AgentGate API key")
+        raise ValueError("Invalid or missing Agenate API key")
 
 
 @server.tool(
@@ -48,7 +48,7 @@ def query_database(agent_id: str, query: str, api_key: str) -> dict[str, Any]:
 
 
 @server.tool(
-    description="List pending AgentGate approval requests using a valid agent key.",
+    description="List pending Agenate approval requests using a valid agent key.",
     structured_output=True,
 )
 def list_pending_approvals(api_key: str) -> dict[str, Any]:
@@ -59,7 +59,7 @@ def list_pending_approvals(api_key: str) -> dict[str, Any]:
 
 @server.tool(
     description=(
-        "Approve or reject a pending AgentGate request. A valid AgentGate "
+        "Approve or reject a pending Agenate request. A valid Agenate "
         "agent key is required; reviewer identifies the human reviewer."
     ),
     structured_output=True,

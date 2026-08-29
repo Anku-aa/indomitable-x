@@ -1,4 +1,4 @@
-"""Smoke-test representative AgentGate policy decisions."""
+"""Smoke-test representative Agenate policy decisions."""
 
 from pprint import pprint
 

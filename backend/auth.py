@@ -1,4 +1,4 @@
-"""Simple static API-key authentication for registered AgentGate agents."""
+"""Simple static API-key authentication for registered Agenate agents."""
 
 import hmac
 import json

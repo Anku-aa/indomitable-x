@@ -26,4 +26,4 @@ def compliance_report_pdf(hours: int = 24):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     pdf = generate_pdf(report, report["stats"])
-    return Response(content=pdf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=agentgate-compliance-report.pdf"})
+    return Response(content=pdf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=agenate-compliance-report.pdf"})

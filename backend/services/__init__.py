@@ -1,1 +1,1 @@
-"""Application services for AgentGate."""
+"""Application services for Agenate."""

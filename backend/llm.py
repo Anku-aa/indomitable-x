@@ -178,7 +178,7 @@ def _validate_llm_result(result):
 
 
 def _call_groq(nl_query, api_key):
-    prompt = f"""Convert the user's request into one database query for AgentGate.
+    prompt = f"""Convert the user's request into one database query for Agenate.
 
 Governed database schema:
 {_schema_description()}

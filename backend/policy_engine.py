@@ -1,4 +1,4 @@
-"""Config-driven authorization and risk evaluation for AgentGate."""
+"""Config-driven authorization and risk evaluation for Agenate."""
 
 import os
 from pathlib import Path

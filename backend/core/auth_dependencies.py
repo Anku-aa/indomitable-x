@@ -1,4 +1,4 @@
-"""FastAPI authentication dependencies for AgentGate."""
+"""FastAPI authentication dependencies for Agenate."""
 
 from typing import Optional
 
@@ -28,6 +28,6 @@ def _agent_for_key(api_key: str) -> Optional[str]:
 
 
 def print_agent_keys():
-    print("AgentGate API keys (demo-only; keep these secret):")
+    print("Agenate API keys (demo-only; keep these secret):")
     for agent_id, key in AGENT_KEYS.items():
         print(f"  {agent_id}: {key}")

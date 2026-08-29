@@ -14,3 +14,8 @@ export const AGENT_OPTIONS = [
   "senior_hr_agent",
   "rogue_agent",
 ];
+
+// Vite exposes only explicitly prefixed values to the browser bundle.
+export const DEMO_AGENT_KEYS = {
+  recruiter_agent: import.meta.env.VITE_RECRUITER_BEARER_KEY || "",
+};

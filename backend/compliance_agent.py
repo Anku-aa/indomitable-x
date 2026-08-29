@@ -1,4 +1,4 @@
-"""Human-readable compliance reporting from the AgentGate audit trail."""
+"""Human-readable compliance reporting from the Agenate audit trail."""
 
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -145,7 +145,7 @@ def _audit_trail(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _call_groq(stats: dict[str, Any], api_key: str) -> str:
     prompt = f"""You are writing a compliance report for a non-technical compliance officer.
-Use the AgentGate audit statistics below. Write a clear, professional summary
+Use the Agenate audit statistics below. Write a clear, professional summary
 in plain English in 3 to 5 short paragraphs. Explain what happened, what
 stands out, and what needs human attention. Do not mention prompts, JSON, or
 implementation details. Do not invent facts beyond the statistics.
@@ -196,7 +196,7 @@ def _template_summary(stats: dict[str, Any]) -> str:
         attention.append(f"the Guardian recorded {quarantine_count} quarantine action(s)")
     attention_text = "; ".join(attention) if attention else "No immediate exceptions were recorded."
     return (
-        f"During the last {stats['period_hours']} hours, AgentGate recorded "
+        f"During the last {stats['period_hours']} hours, Agenate recorded "
         f"{stats['total_requests']} audit event(s). The activity breakdown was "
         f"{breakdown['executed']} executed, {breakdown['denied']} denied, "
         f"{breakdown['pending']} pending approval, {breakdown['approved']} approved, "
@@ -247,7 +247,7 @@ def generate_pdf(report: dict[str, Any], stats: dict[str, Any]) -> bytes:
         leftMargin=0.55 * inch,
         topMargin=0.5 * inch,
         bottomMargin=0.5 * inch,
-        title="AgentGate Compliance Report",
+        title="Agenate Compliance Report",
     )
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle("ReportTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=18, textColor=colors.HexColor("#163b39"), spaceAfter=4)
@@ -256,7 +256,7 @@ def generate_pdf(report: dict[str, Any], stats: dict[str, Any]) -> bytes:
     small_style = ParagraphStyle("ReportSmall", parent=styles["Normal"], fontName="Helvetica", fontSize=8, leading=10, textColor=colors.HexColor("#263634"))
 
     story = [
-        Paragraph("AgentGate Compliance Report", title_style),
+        Paragraph("Agenate Compliance Report", title_style),
         Paragraph(f"Review period: last {stats['period_hours']} hours | Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}", meta_style),
     ]
     for paragraph in report["summary"].split("\n\n"):

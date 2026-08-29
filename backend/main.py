@@ -1,4 +1,4 @@
-"""FastAPI application assembly for the AgentGate governance layer."""
+"""FastAPI application assembly for the Agenate governance layer."""
 
 import uvicorn
 from fastapi import FastAPI
@@ -21,7 +21,7 @@ DEFAULT_PORT = 8000
 
 init_db()
 
-app = FastAPI(title="AgentGate")
+app = FastAPI(title="Agenate")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

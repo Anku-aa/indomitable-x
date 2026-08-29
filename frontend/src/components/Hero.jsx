@@ -6,9 +6,9 @@ export default function Hero({ query, setQuery, send, loading, selectedAgent, se
       <section id="hero">
         <div className="hero-grid" /><div className="hero-orb" />
         <div className="hero-meta">// Autonomous governance<br />// hr_records / 3,400 records<br />// system online</div>
-        <div className="hero-kicker">YOUR AGENTS CAN ACT. AGENTGATE DECIDES.</div>
+        <div className="hero-kicker">YOUR AGENTS CAN ACT. AGENATE DECIDES.</div>
         <h1 className="hero-title"><span className="hero-line"><span className="hero-word">AGENTS</span></span><span className="hero-line"><span className="hero-word accent">WITH</span></span><span className="hero-line"><span className="hero-word">BOUNDARIES</span></span></h1>
-        <div className="hero-bottom"><p className="hero-desc">AgentGate is the control layer between <strong>natural language</strong> and your database. Interpret intent. Enforce policy. Redact risk. Keep proof.</p><div className="scroll-note">Scroll to inspect<br />↓ ↓ ↓</div></div>
+        <div className="hero-bottom"><p className="hero-desc">Agenate is the control layer between <strong>natural language</strong> and your database. Interpret intent. Enforce policy. Redact risk. Keep proof.</p><div className="scroll-note">Scroll to inspect<br />↓ ↓ ↓</div></div>
         <div className="query-card" id="request">
           <div className="query-label">// Send governed request</div>
           <div className="agent-picker"><label htmlFor="agent-select">Identity / agent</label><select id="agent-select" value={selectedAgent} onChange={(event) => setSelectedAgent(event.target.value)}>{AGENT_OPTIONS.map((agent) => <option value={agent} key={agent}>{agent}</option>)}</select></div>

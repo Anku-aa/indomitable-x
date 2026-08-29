@@ -1,1 +1,1 @@
-"""FastAPI route modules for AgentGate."""
+"""FastAPI route modules for Agenate."""

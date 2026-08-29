@@ -1,4 +1,4 @@
-"""Autonomous behavioral monitoring for AgentGate."""
+"""Autonomous behavioral monitoring for Agenate."""
 
 import json
 import os
@@ -197,7 +197,7 @@ def _activity_summary(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _call_groq(summary: list[dict[str, Any]], api_key: str) -> list[dict[str, str]]:
-    prompt = f"""You are the AgentGate Guardian Agent. Review this recent agent activity summary.
+    prompt = f"""You are the Agenate Guardian Agent. Review this recent agent activity summary.
 Identify repeated denied sensitive-data attempts, rapid-fire/scripted behavior,
 and escalating risk. Return ONLY a JSON array with one object per agent:
 {{"agent_id":"...","verdict":"normal|flag|quarantine","reasoning":"..."}}

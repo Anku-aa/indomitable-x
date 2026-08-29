@@ -1,10 +1,10 @@
-# AgentGate
+# Agenate
 
-AgentGate is a governance layer between AI agents and a database. It turns a natural-language request into a structured query, evaluates that query against the requesting agent's permissions, and only then allows database execution. Sensitive employee data is protected by column-level policy, risk scoring, redaction, audit logging, and optional human approval.
+Agenate is a governance layer between AI agents and a database. It turns a natural-language request into a structured query, evaluates that query against the requesting agent's permissions, and only then allows database execution. Sensitive employee data is protected by column-level policy, risk scoring, redaction, audit logging, and optional human approval.
 
 ## Problem
 
-AI agents are useful database operators, but a natural-language request can hide dangerous intent: an HR agent may accidentally request salary data, an analytics agent may expose individual salaries instead of an aggregate, or an untrusted agent may attempt to read SSNs or delete records. AgentGate makes the authorization boundary explicit and inspectable before an agent reaches SQLite.
+AI agents are useful database operators, but a natural-language request can hide dangerous intent: an HR agent may accidentally request salary data, an analytics agent may expose individual salaries instead of an aggregate, or an untrusted agent may attempt to read SSNs or delete records. Agenate makes the authorization boundary explicit and inspectable before an agent reaches SQLite.
 
 ## Architecture
 
@@ -66,12 +66,12 @@ The API is available at `http://127.0.0.1:8000`. To use Groq interpretation, set
 export GROQ_API_KEY="your-api-key"
 ```
 
-Groq provides fast inference for this demo; a free API key can be created at [console.groq.com](https://console.groq.com/). Without `GROQ_API_KEY`, AgentGate makes no LLM call and uses the local parser and rule-based Guardian/compliance summaries.
+Groq provides fast inference for this demo; a free API key can be created at [console.groq.com](https://console.groq.com/). Without `GROQ_API_KEY`, Agenate makes no LLM call and uses the local parser and rule-based Guardian/compliance summaries.
 
 ### MCP Server
 
-AgentGate also exposes the same governed flow as an MCP stdio server. The MCP
-tools require an AgentGate API key, so copy the key printed by the server (or
+Agenate also exposes the same governed flow as an MCP stdio server. The MCP
+tools require an Agenate API key, so copy the key printed by the server (or
 read the demo-only `backend/.agent_keys.json` file) when configuring a client.
 
 Run the MCP server from the backend directory:
@@ -81,13 +81,13 @@ cd "/Users/aniketsingh/Documents/local/Indomitable X/backend"
 python3 mcp_server.py
 ```
 
-For Claude Desktop, add an `agentgate` entry to
+For Claude Desktop, add an `agenate` entry to
 `claude_desktop_config.json` (the location depends on macOS version):
 
 ```json
 {
   "mcpServers": {
-    "agentgate": {
+    "agenate": {
       "command": "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3",
       "args": ["/Users/aniketsingh/Documents/local/Indomitable X/backend/mcp_server.py"],
       "env": {
@@ -122,13 +122,13 @@ uvicorn main:app --port 8000
 
 The `hr_records` and `audit_log` schemas, policy flow, hash-chain verification, and API queries work against either backend. For a live demo deployment, a free PostgreSQL instance from [Supabase](https://supabase.com/) or [Render](https://render.com/) works well; copy its connection string into `DB_URL`.
 
-### Test AgentGate Against Your Own Data
+### Test Agenate Against Your Own Data
 
-AgentGate is schema-agnostic. To govern a real SQLite or PostgreSQL table:
+Agenate is schema-agnostic. To govern a real SQLite or PostgreSQL table:
 
 1. Point `DB_URL` at the database. For SQLite use an absolute URL such as `sqlite:////Users/me/data.db`; for PostgreSQL use `postgresql://user:password@host/database`.
 2. Edit `backend/policies.yaml`. Add each agent and governed table, listing the columns it may see, sensitive columns that must be redacted, allowed operations, and update columns. The table and column names can be completely different from the demo.
-3. Restart Uvicorn. On startup AgentGate introspects the configured tables and builds the natural-language prompt from the live schema. No Python code changes or employee seed data are needed for a custom database.
+3. Restart Uvicorn. On startup Agenate introspects the configured tables and builds the natural-language prompt from the live schema. No Python code changes or employee seed data are needed for a custom database.
 
 The consolidated policies are in `backend/policies.yaml` and all target `hr_records`: recruiters see organizational fields, HR analytics sees sensitive metrics only through aggregates, senior HR can read selected individual metrics but never row-level attrition, support has limited read-only access, and the rogue role has no permissions.
 
@@ -227,7 +227,7 @@ Generate a compliance report for the last 24 hours and download its PDF:
 
 ```bash
 curl 'http://127.0.0.1:8000/compliance/report?hours=24'
-curl -o agentgate-compliance-report.pdf 'http://127.0.0.1:8000/compliance/report/pdf?hours=24'
+curl -o agenate-compliance-report.pdf 'http://127.0.0.1:8000/compliance/report/pdf?hours=24'
 ```
 
 Run the narrated demo against the running server:
@@ -241,7 +241,7 @@ python3 backend/demo_agents.py
 
 ### Technical Complexity — 35%
 
-AgentGate combines natural-language interpretation, structured query handling, role-based authorization, sensitive-column controls, aggregate-only restrictions, risk scoring, SQL execution, redaction, auditability, and a human approval path in one request lifecycle.
+Agenate combines natural-language interpretation, structured query handling, role-based authorization, sensitive-column controls, aggregate-only restrictions, risk scoring, SQL execution, redaction, auditability, and a human approval path in one request lifecycle.
 
 ### Innovation — 25%
 
@@ -258,7 +258,7 @@ The dashboard is a direct-open security console rather than a generic admin scre
 ## Project Files
 
 ```text
-agentgate/
+agenate/
 ├── backend/
 │   ├── db.py                  Database engine, schema discovery, and optional seed data
 │   ├── policy_engine.py       Agent roles and risk evaluation

@@ -22,6 +22,7 @@ import Approvals from "./components/Approvals";
 import AgentRisk from "./components/AgentRisk";
 import Guardian from "./components/Guardian";
 import Compliance from "./components/Compliance";
+import { DEMO_AGENT_KEYS } from "./config/appConfig";
 
 function App() {
   const dispatch = useDispatch();
@@ -30,7 +31,7 @@ function App() {
   const [toast, setToast] = useToast();
   const [query, setQuery] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("recruiter_agent");
-  const [agentKey, setAgentKey] = useState(() => localStorage.getItem("agentgate_key_recruiter_agent") || "");
+  const [agentKey, setAgentKey] = useState(() => localStorage.getItem("agenate_key_recruiter_agent") || DEMO_AGENT_KEYS.recruiter_agent);
 
   async function refreshTelemetry() {
     try {
@@ -56,12 +57,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    setAgentKey(localStorage.getItem(`agentgate_key_${selectedAgent}`) || "");
+    setAgentKey(localStorage.getItem(`agenate_key_${selectedAgent}`) || DEMO_AGENT_KEYS[selectedAgent] || "");
   }, [selectedAgent]);
 
   async function send() {
     if (!query.trim() || loading) return;
-    if (agentKey) localStorage.setItem(`agentgate_key_${selectedAgent}`, agentKey);
+    if (agentKey) localStorage.setItem(`agenate_key_${selectedAgent}`, agentKey);
     dispatch(workflowCleared());
     dispatch(requestStarted());
     document.getElementById("governance-path")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -86,7 +87,7 @@ function App() {
       <ThreeBackdrop />
       <div className="noise-overlay" />
       <div className="react-page">
-        <nav className="nav"><Link className="logo" to="/">AGENT<span>GATE</span></Link><div className="nav-links"><a href="#workspace">Control room</a><a href="#guardian">Guardian</a><a href="#compliance">Compliance</a></div><a className="nav-cta" href="#request">Open console</a></nav>
+        <nav className="nav"><Link className="logo" to="/">Agen<span>ate</span></Link><div className="nav-links"><a href="#workspace">Control room</a><a href="#guardian">Guardian</a><a href="#compliance">Compliance</a></div><a className="nav-cta" href="#request">Open console</a></nav>
         <main>
           <Hero query={query} setQuery={setQuery} send={send} loading={loading} selectedAgent={selectedAgent} setSelectedAgent={setSelectedAgent} agentKey={agentKey} setAgentKey={setAgentKey} />
           <div id="governance-path"><Workflow response={latestResponse} /></div>
@@ -96,7 +97,7 @@ function App() {
           <Guardian toast={setToast} onChanged={refreshTelemetry} />
           <Compliance toast={setToast} />
         </main>
-        <footer className="footer"><span><strong>AGENTGATE</strong> // governed intelligence</span><span>{connected ? "API LINK // ONLINE" : "API LINK // OFFLINE"} // hr_records // 3400 rows</span></footer>
+        <footer className="footer"><span><strong>AGENATE</strong> // governed intelligence</span><span>{connected ? "API LINK // ONLINE" : "API LINK // OFFLINE"} // hr_records // 3400 rows</span></footer>
       </div>
       {(loading || error || toast) && <div className="toast show">{loading ? "EVALUATING..." : error || toast}</div>}
       <HeroMotion />
