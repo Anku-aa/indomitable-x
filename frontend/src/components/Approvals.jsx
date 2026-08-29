@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useSelector } from "react-redux";
 import { api } from "../api";
 
@@ -5,11 +6,16 @@ export default function Approvals({ toast, onChanged, onResolved }) {
   const items = useSelector((state) => state.telemetry.approvals);
   const quarantined = useSelector((state) => (state.telemetry.guardian.quarantined_agents || []).map((agent) => agent.agent_id));
   const unique = [...new Map(items.map((item) => [String(item.id), item])).values()];
+  const rejecting = useRef(new Set());
 
   async function review(item, approve) {
     const held = item.status === "auto_held_quarantine" || quarantined.includes(item.agent_id);
     if (approve && held && !window.confirm("This agent is quarantined. Confirm explicit override and approval?")) return;
-    const reviewer = window.prompt("Reviewer name", "console operator") || "console operator";
+    if (!approve) {
+      if (rejecting.current.has(item.id)) return;
+      rejecting.current.add(item.id);
+    }
+    const reviewer = approve ? window.prompt("Reviewer name", "console operator") || "console operator" : "console operator";
     try {
       const response = await api(`/approvals/${item.id}`, { method: "POST", body: JSON.stringify({ approve, reviewer, confirm_quarantine_override: held && approve }) });
       onResolved(response);
@@ -17,6 +23,8 @@ export default function Approvals({ toast, onChanged, onResolved }) {
       toast(approve ? "Request approved" : "Request rejected");
     } catch (error) {
       toast(error.message);
+    } finally {
+      if (!approve) rejecting.current.delete(item.id);
     }
   }
 

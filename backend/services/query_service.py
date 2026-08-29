@@ -35,15 +35,24 @@ def _execute(parsed_query: dict[str, Any], query: str, target_row_id: Optional[i
     row_key = row_key or next((column for column in ("id", "Employee_ID") if column in schema_columns), None)
 
     if operation == "DELETE":
-        if row_id is None:
-            raise ValueError("An employee id is required for DELETE")
-        if row_key is None:
-            raise ValueError(f"Table '{table}' has no primary key for targeted DELETE")
+        if " where " not in f" {sql.lower()} ":
+            raise ValueError("Unsafe unrestricted DELETE blocked; a WHERE condition is required")
+        if ":id" in sql:
+            if row_id is None:
+                raise ValueError("An employee id is required for DELETE")
+            if row_key is None:
+                raise ValueError(f"Table '{table}' has no primary key for targeted DELETE")
+            params["id"] = row_id
+        if ":department_filter" in sql:
+            from llm import _department_filter_value
+
+            department = _department_filter_value(query, schema)
+            if not department:
+                raise ValueError("A department is required for condition-based DELETE")
+            params["department_filter"] = department
         with get_engine().begin() as connection:
-            cursor = connection.execute(text(f"DELETE FROM {table} WHERE {row_key} = :row_id"), {"row_id": row_id})
-            if cursor.rowcount == 0:
-                return {"status": f"no employee row found for id {row_id}", "row_count": 0}
-            return {"status": f"deleted row id {row_id}", "row_count": cursor.rowcount}
+            cursor = connection.execute(text(sql), params)
+            return {"status": "delete completed", "row_count": cursor.rowcount}
 
     if ":id" in sql:
         if row_id is None:

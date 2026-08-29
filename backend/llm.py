@@ -90,6 +90,19 @@ def _overtime_filter(text: str, schema: list[dict[str, object]]) -> str | None:
     return f"Overtime = {_quoted(value)}"
 
 
+def _department_filter_value(text: str, schema: list[dict[str, object]]) -> str | None:
+    names = {str(column["name"]) for column in schema}
+    if "Department" not in names:
+        return None
+    match = re.search(
+        r"\b(?:in|from)\s+(?:the\s+)?([A-Za-z][A-Za-z0-9 &-]*?)(?:\s+department)?"
+        r"(?:\s+(?:and|their|with|where)|[?.!,]|$)",
+        text,
+        re.IGNORECASE,
+    )
+    return match.group(1).strip() if match else None
+
+
 def _parsed(operation, table, columns, is_aggregate, sql):
     return {"operation": operation, "table": table, "columns": columns, "is_aggregate": is_aggregate, "sql": sql}
 
@@ -125,7 +138,17 @@ def _rule_based_parse(nl_query):
         where_clause = " WHERE id = :id" if has_id_filter else ""
         return _parsed("UPDATE", table, update_columns, False, f"UPDATE {table} SET {assignments}{where_clause};")
     if re.search(r"\b(delete|remove)\b", lowered):
-        sql = f"DELETE FROM {table} WHERE id = :id;" if "id" in columns else f"DELETE FROM {table};"
+        target_id = extract_target_row_id(text)
+        row_key = next((column for column in ("id", "Employee_ID") if column in all_columns), None)
+        department = _department_filter_value(text, schema)
+        if target_id is not None and row_key:
+            columns = [row_key]
+            sql = f"DELETE FROM {table} WHERE {row_key} = :id;"
+        elif department:
+            columns = ["Department"]
+            sql = f"DELETE FROM {table} WHERE Department = :department_filter;"
+        else:
+            sql = f"DELETE FROM {table};"
         return _parsed("DELETE", table, columns, False, sql)
 
     columns = columns or all_columns
