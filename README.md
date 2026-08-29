@@ -1,281 +1,354 @@
 # Agenate
 
-Agenate is a governance layer between AI agents and a database. It turns a natural-language request into a structured query, evaluates that query against the requesting agent's permissions, and only then allows database execution. Sensitive employee data is protected by column-level policy, risk scoring, redaction, audit logging, and optional human approval.
+**A governance layer for AI agents that need controlled access to real business data.**
 
-## Problem
+Agenate sits between an agent and a database. It understands a natural-language request, checks the agent's identity and policy, redacts protected fields, requests human approval for risky actions, and records tamper-evident audit evidence.
 
-AI agents are useful database operators, but a natural-language request can hide dangerous intent: an HR agent may accidentally request salary data, an analytics agent may expose individual salaries instead of an aggregate, or an untrusted agent may attempt to read SSNs or delete records. Agenate makes the authorization boundary explicit and inspectable before an agent reaches SQLite.
+## Why Agenate?
 
-## Architecture
+AI agents can work with data quickly, but they are also easy to misconfigure or impersonate. A normal database connection does not explain:
 
-```text
-Agent / natural-language request
-              |
-              v
-       llm.interpret()
-       Groq or local parser
-              |
-              v
-     policy_engine.evaluate()
-     identity + table + column + risk checks
-              |
-       +------+------------------+
-       |                         |
-    ALLOW              REQUIRE_APPROVAL / DENY
-       |                         |
-       v                         v
-   SQLite DB       approval queue or blocked request
-       |
-       +-----------> audit log
-```
+- Which agent made a request
+- Whether the agent was authenticated
+- Which columns it was allowed to see
+- Why a request was blocked or held for review
+- What happened after a human approved an action
 
-- `llm.py` converts natural language into `{operation, table, columns, is_aggregate, sql}`. It uses Groq when `GROQ_API_KEY` is present and a zero-configuration keyword parser otherwise.
-- `policy_engine.py` registers five focused roles for the real `hr_records` dataset: `recruiter_agent`, `hr_analytics_agent`, `senior_hr_agent`, and `rogue_agent`.
-- `main.py` coordinates interpretation, policy decisions, SQLite execution, redaction, the in-memory approval queue, and the audit log.
-- `db.py` defaults to the loaded `hr_records` database. The original five-row `employees` seed path remains available only when a different database URL is selected.
-- `db.py` discovers governed table columns dynamically using SQLite `PRAGMA table_info` or PostgreSQL `information_schema`.
-- `policies.yaml` defines which agents can access which tables, columns, operations, and sensitive fields.
-- `frontend/index.html` is a build-free governance console that polls audit and approval state from the API.
-- `compliance_agent.py` turns the audit trail into a plain-English report and a one-page PDF for compliance review.
+Agenate makes those decisions visible and enforceable.
 
-## Tech Stack
+## Request Lifecycle
 
-- Python 3
-- FastAPI and Uvicorn
-- MCP Python SDK for direct Claude Desktop / Claude Code tool access
-- ReportLab for downloadable compliance PDFs
-- Pydantic request models
-- SQLAlchemy Core with SQLite or PostgreSQL
-- Groq's OpenAI-compatible API via Python's standard-library HTTP client, with a local parser fallback
-- Single-file HTML, CSS, and JavaScript frontend
+~~~text
+Natural-language request
+        |
+        v
+Authentication -> LLM interpretation -> Policy evaluation
+        |                  |                    |
+        +------------------+--------------------+
+                           v
+              ALLOW / REDACT / APPROVAL / DENY
+                           |
+              Database execution or blocking
+                           |
+                  Persistent audit log 
+~~~
 
-## Setup
+The frontend shows this lifecycle as the Governance Path. The backend remains the source of truth for decisions and results.
 
-From the project directory:
+## Current Dataset And Roles
 
-```bash
-cd "/Users/aniketsingh/Documents/local/Indomitable X"
-python3 -m pip install -r backend/requirements.txt
+The default demo is centered on the 3,400-row hr_records dataset loaded from backend/data/HR_Dataset.csv.
+
+| Agent | Allowed use |
+|---|---|
+| recruiter_agent | Read HR organization data: Department, Job_Role, Education_Level, and Years_At_Company |
+| hr_analytics_agent | Aggregate-only analysis of Monthly_Income, Performance_Rating, Job_Satisfaction, and Attrition; individual sensitive values are protected |
+| senior_hr_agent | Individual Monthly_Income and Performance_Rating access; updates require approval; row-level Attrition is always denied |
+| rogue_agent | No database permissions; requests are denied |
+
+Policies are configured in backend/policies.yaml. Authentication keys are generated by backend/auth.py. Never commit keys or place them in documentation.
+
+## Main Features
+
+- FastAPI REST API for governed agent requests
+- API-key authentication with claimed-agent verification
+- Rule-based zero-configuration parser with optional Groq interpretation
+- YAML-configured table, column, operation, and sensitivity policies
+- Column redaction instead of unnecessarily denying broad reads
+- Human approval queue for risky updates, inserts, and deletes
+- Safe parameterized database execution
+- SQLite by default and PostgreSQL as an alternative
+- Persistent audit log
+- Autonomous Guardian Agent for suspicious activity
+- Compliance reports with JSON and downloadable PDF output
+- MCP tools for compatible AI clients
+- React/Vite dashboard with live audit, approvals, governance trace, Guardian, and compliance views
+
+## Technology Stack
+
+- Backend: Python, FastAPI, Uvicorn, Pydantic
+- Database: SQLAlchemy, SQLite, PostgreSQL, psycopg2-binary
+- LLM: Groq OpenAI-compatible API, with a local rule-based fallback
+- Frontend: React, Vite, Redux Toolkit, React Router, GSAP, Three.js, custom CSS
+- Integrations: MCP Python SDK, ReportLab
+
+## Project Structure
+
+~~~text
+agenate/
+├── backend/
+│   ├── main.py
+│   ├── auth.py
+│   ├── db.py
+│   ├── llm.py
+│   ├── policy_engine.py
+│   ├── policies.yaml
+│   ├── guardian_agent.py
+│   ├── compliance_agent.py
+│   ├── mcp_server.py
+│   ├── models.py
+│   ├── core/
+│   ├── routes/
+│   ├── services/
+│   ├── scripts/load_hr_dataset.py
+│   ├── data/HR_Dataset.csv
+│   ├── demo_agents.py
+│   ├── tests/
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   ├── index.html
+│   ├── styles.css
+│   ├── package.json
+│   └── .env.example
+├── README.md
+└── .gitignore
+~~~
+
+## Run Locally
+
+### 1. Prepare the backend
+
+From the repository root:
+
+~~~bash
+python3 -m venv backend/.venv
+backend/.venv/bin/python -m pip install -r backend/requirements.txt
+~~~
+
+The default database is SQLite. To load or refresh the CSV demo table:
+
+~~~bash
 cd backend
-uvicorn main:app --port 8000
-```
+.venv/bin/python scripts/load_hr_dataset.py
+~~~
 
-The API is available at `http://127.0.0.1:8000`. To use Groq interpretation, set the key in a local gitignored `.env` file or export it before starting the server:
+Start the API:
 
-```bash
-export GROQ_API_KEY="your-api-key"
-```
+~~~bash
+.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+~~~
 
-Groq provides fast inference for this demo; a free API key can be created at [console.groq.com](https://console.groq.com/). Without `GROQ_API_KEY`, Agenate makes no LLM call and uses the local parser and rule-based Guardian/compliance summaries.
+Keep this terminal running.
 
-### MCP Server
+### 2. Start the frontend
 
-Agenate also exposes the same governed flow as an MCP stdio server. The MCP
-tools require an Agenate API key, so copy the key printed by the server (or
-read the demo-only `backend/.agent_keys.json` file) when configuring a client.
+Open a second terminal:
 
-Run the MCP server from the backend directory:
+~~~bash
+cd frontend
+npm install
+npm run dev
+~~~
 
-```bash
-cd "/Users/aniketsingh/Documents/local/Indomitable X/backend"
-python3 mcp_server.py
-```
+Open the local URL printed by Vite, normally http://localhost:5173.
 
-For Claude Desktop, add an `agenate` entry to
-`claude_desktop_config.json` (the location depends on macOS version):
+The frontend uses http://127.0.0.1:8000 by default in development. To set it explicitly, create frontend/.env.local:
 
-```json
+~~~env
+VITE_API_BASE_URL=http://127.0.0.1:8000
+~~~
+
+### 3. Authentication
+
+When the backend starts, it prints generated demo keys for the configured agents. Use the key for the same agent_id in the Authorization header:
+
+~~~text
+Authorization: Bearer YOUR_AGENT_KEY
+~~~
+
+Keys are local credentials. Do not commit them, paste them into README files, or expose them in screenshots. The frontend demo key, if configured with VITE_RECRUITER_BEARER_KEY, is visible to browser users and must not be treated as a server secret.
+
+## API Endpoints
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | /health | Health check |
+| GET | /agents | List configured agent roles |
+| POST | /agent/query | Interpret, govern, and execute or queue a request |
+| GET | /approvals | List pending approvals |
+| POST | /approvals/{id} | Approve or reject a pending request |
+| GET | /audit-log | Read recent audit entries |
+| GET | /audit-log/verify | Verify the complete hash chain |
+| POST | /guardian/run | Run Guardian analysis |
+| GET | /guardian/status | View quarantined agents |
+| POST | /guardian/lift/{agent_id} | Lift a quarantine |
+| GET | /compliance/report?hours=24 | Generate a compliance report |
+| GET | /compliance/report/pdf | Download the report as a PDF |
+
+## Example Requests
+
+Replace YOUR_AGENT_KEY with the matching local key. Never put a real key in source control.
+
+~~~bash
+curl http://127.0.0.1:8000/health
+
+curl -X POST http://127.0.0.1:8000/agent/query +  -H "Content-Type: application/json" +  -H "Authorization: Bearer YOUR_RECRUITER_KEY" +  -d '{"agent_id":"recruiter_agent","query":"Show employees in the Sales department and their job roles"}'
+~~~
+
+Useful demo prompts:
+
+~~~text
+Show employees in the Marketing department and their job roles
+What is the average monthly income by department?
+Show the performance rating of employee 1001
+Update monthly income of employee 1001 to 90000
+Delete employee 1002
+~~~
+
+Typical outcomes:
+
+- A permitted read is executed and disallowed columns are returned as ***REDACTED***.
+- An aggregate request can use protected metrics when the role permits aggregate access.
+- A risky update or delete becomes pending_approval and does not touch the database until approved.
+- A rejected approval never executes.
+- Rogue or unauthenticated requests are blocked before database access.
+
+## PostgreSQL
+
+SQLite is the zero-configuration default:
+
+~~~env
+DB_URL=sqlite:///./hr_demo.db
+~~~
+
+To use PostgreSQL, set DB_URL to a PostgreSQL connection string before starting the backend:
+
+~~~env
+DB_URL=postgresql://USER:PASSWORD@HOST/DATABASE
+~~~
+
+Supabase or Render PostgreSQL are convenient options for a live demo. Store this value only in the hosting provider's environment settings or a local ignored .env file.
+
+For a persistent production database, load the CSV once as a controlled deployment step. Do not run a destructive table-replacement loader on every production restart unless that behavior is intentional.
+
+## Deploy On Render And Vercel
+
+### Render backend
+
+Recommended Render settings when backend/ is the service root:
+
+- Root directory: backend
+- Build command: pip install -r requirements.txt
+- Start command: uvicorn main:app --host 0.0.0.0 --port $PORT
+- Environment variable: DB_URL
+- Optional environment variable: GROQ_API_KEY
+
+If the Render service uses the repository root instead, adjust the module path and file paths accordingly. Render supplies PORT; the backend must bind to 0.0.0.0.
+
+### Vercel frontend
+
+Set this environment variable for the frontend production build:
+
+~~~env
+VITE_API_BASE_URL=https://indomitable-x.onrender.com
+~~~
+
+Then redeploy the frontend. Vite variables are embedded in browser JavaScript, so VITE_API_BASE_URL is suitable for a URL, not a private secret.
+
+Current demo URLs:
+
+- Frontend: https://agenate.tech or https://agenate.vercel.app
+- Backend: https://indomitable-x.onrender.com
+
+Test the backend directly first:
+
+~~~bash
+curl https://indomitable-x.onrender.com/health
+~~~
+
+## Groq Configuration
+
+Groq is used for fast inference. Create a key at https://console.groq.com/, then set it only in the backend environment:
+
+~~~env
+GROQ_API_KEY=your-key
+~~~
+
+If GROQ_API_KEY is missing or the request fails, Agenate uses the built-in rule-based parser. The application remains usable without an LLM key.
+
+## Use Your Own Data
+
+1. Point DB_URL at your SQLite or PostgreSQL database.
+2. Add the real governed tables and columns to backend/policies.yaml.
+3. Mark sensitive columns explicitly and define allowed operations and update columns.
+4. Run the schema/data setup needed for your database.
+5. Restart the backend.
+
+The policy engine discovers table schemas through SQLAlchemy, then validates the resolved table and columns against the YAML policy. A malformed or unknown table is not allowed to bypass policy checks.
+
+## MCP Server
+
+The MCP server wraps the same interpretation, policy, execution, approval, and audit logic used by REST. Run it from the backend environment:
+
+~~~bash
+cd backend
+.venv/bin/python mcp_server.py
+~~~
+
+A Claude Desktop configuration can point to the server with an absolute path:
+
+~~~json
 {
   "mcpServers": {
     "agenate": {
-      "command": "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3",
-      "args": ["/Users/aniketsingh/Documents/local/Indomitable X/backend/mcp_server.py"],
-      "env": {
-        "DB_URL": "sqlite:////Users/aniketsingh/Documents/local/Indomitable X/backend/hr_demo.db"
-      }
+      "command": "/absolute/path/to/Indomitable X/backend/.venv/bin/python",
+      "args": ["/absolute/path/to/Indomitable X/backend/mcp_server.py"]
     }
   }
 }
-```
+~~~
 
-The `query_database` tool accepts `agent_id`, the natural-language `query`,
-and `api_key`. `list_pending_approvals` and `resolve_approval` also require a
-valid `api_key`. For PostgreSQL, set the same `DB_URL` in the MCP entry, for
-example `postgresql://user:password@host/dbname`.
+Use the same agent credentials and policy rules as the REST application. Do not place API keys in this JSON file unless your local MCP client specifically requires a separately protected environment configuration.
 
-### Database Backends
+## Guardian And Compliance
 
-The consolidated demo uses `sqlite:///./hr_demo.db` by default. Create/populate it once with the included CSV loader:
+The Guardian Agent analyzes recent audit activity for repeated denials, high-risk actions, rapid-fire behavior, and sensitive-column targeting. It can quarantine an agent; new requests from that agent are then rejected until a human lifts the quarantine.
 
-```bash
-cd "/Users/aniketsingh/Documents/local/Indomitable X/backend"
-python3 scripts/load_hr_dataset.py
-```
+The Compliance Reporter summarizes a selected time window without copying raw query results into the report. Its audit trail contains timestamps, agent IDs, shortened queries, decisions, risk scores, and row counts. The PDF endpoint produces a compact report suitable for review.
 
-To switch to PostgreSQL, set `DB_URL` before starting Uvicorn:
+## Testing
 
-```bash
-export DB_URL="postgresql://user:password@host/dbname"
-cd "/Users/aniketsingh/Documents/local/Indomitable X/backend"
-uvicorn main:app --port 8000
-```
+Run backend tests from the repository root:
 
-The `hr_records` and `audit_log` schemas, policy flow, hash-chain verification, and API queries work against either backend. For a live demo deployment, a free PostgreSQL instance from [Supabase](https://supabase.com/) or [Render](https://render.com/) works well; copy its connection string into `DB_URL`.
+~~~bash
+python3 -m pytest -q
+~~~
 
-### Test Agenate Against Your Own Data
+If pytest is not installed in the active environment:
 
-Agenate is schema-agnostic. To govern a real SQLite or PostgreSQL table:
+~~~bash
+python3 -m pip install pytest
+~~~
 
-1. Point `DB_URL` at the database. For SQLite use an absolute URL such as `sqlite:////Users/me/data.db`; for PostgreSQL use `postgresql://user:password@host/database`.
-2. Edit `backend/policies.yaml`. Add each agent and governed table, listing the columns it may see, sensitive columns that must be redacted, allowed operations, and update columns. The table and column names can be completely different from the demo.
-3. Restart Uvicorn. On startup Agenate introspects the configured tables and builds the natural-language prompt from the live schema. No Python code changes or employee seed data are needed for a custom database.
+Run the scripted demo while the API is running:
 
-The consolidated policies are in `backend/policies.yaml` and all target `hr_records`: recruiters see organizational fields, HR analytics sees sensitive metrics only through aggregates, senior HR can read selected individual metrics but never row-level attrition, support has limited read-only access, and the rogue role has no permissions.
+~~~bash
+cd backend
+.venv/bin/python demo_agents.py
+~~~
 
-Example policy:
+The demo covers allowed reads, aggregate analysis, protected individual data, risky actions, and rogue-agent denial.
 
-```yaml
-agents:
-  recruiter_agent:
-    label: "Recruiter Agent"
-    tables:
-      hr_records:
-        allowed_columns: [Employee_ID, Department, Job_Role, Education_Level, Years_At_Company]
-        sensitive_columns: [Monthly_Income, Performance_Rating, Attrition]
-        allowed_ops: [SELECT]
-```
+## Security Checklist
 
-If `GROQ_API_KEY` is not set, the local parser still selects the governed table and live columns. With a key, Groq receives the dynamically discovered schema rather than a hardcoded employees description.
+- Keep .env, API keys, bearer keys, passwords, and database files out of Git.
+- Use a different credential for each agent.
+- Never trust a claimed agent_id without verifying its bearer key.
+- Keep GROQ_API_KEY on the backend only.
+- Use PostgreSQL for persistent production data rather than local ephemeral SQLite.
+- Review pending updates, inserts, and deletes before approving them.
+- Verify /audit-log/verify when audit integrity matters.
 
-For a two-terminal demo, keep the server running in Terminal 1 and launch the scripted client from Terminal 2:
+## Hackathon Value
 
-Terminal 1:
+| Judging criterion | How Agenate addresses it |
+|---|---|
+| Technical complexity - 35% | Full request lifecycle, authentication, schema-aware policies, SQLAlchemy portability, approvals, audit hash chaining, Guardian analysis, PDF reporting, and MCP integration |
+| Innovation - 25% | Governance is applied between natural-language agents and data, with explainable redaction and autonomous behavioral monitoring |
+| Functionality - 25% | Working REST API, real HR dataset, approval execution, persistent audit records, compliance export, and connected dashboard |
+| UI/UX - 15% | A focused security-console interface with live request traces, compact results, approvals, Guardian status, and compliance views |
 
-```bash
-cd "/Users/aniketsingh/Documents/local/Indomitable X/backend"
-uvicorn main:app --port 8000
-```
+## License
 
-Confirm the server is ready:
-
-```bash
-curl http://127.0.0.1:8000/health
-```
-
-Expected output:
-
-```json
-{"status":"ok"}
-```
-
-Terminal 2:
-
-```bash
-cd "/Users/aniketsingh/Documents/local/Indomitable X"
-python3 backend/demo_agents.py
-```
-
-The server uses `backend/hr_demo.db` after the loader has run. Open the frontend directly by double-clicking `frontend/index.html`, or open this file path in a browser:
-
-```text
-/Users/aniketsingh/Documents/local/Indomitable X/frontend/index.html
-```
-
-## Try It
-
-Health check:
-
-```bash
-curl http://127.0.0.1:8000/health
-```
-
-Recruiter department read:
-
-```bash
-curl -X POST http://127.0.0.1:8000/agent/query \
-  -H 'Authorization: Bearer <recruiter-agent-key>' \
-  -H 'Content-Type: application/json' \
-  -d '{"agent_id":"recruiter_agent","query":"Show employees in Sales and their job roles"}'
-```
-
-HR analytics aggregate:
-
-```bash
-curl -X POST http://127.0.0.1:8000/agent/query \
-  -H 'Authorization: Bearer <hr-analytics-agent-key>' \
-  -H 'Content-Type: application/json' \
-  -d '{"agent_id":"hr_analytics_agent","query":"What is the average monthly income by department?"}'
-```
-
-Protected row-level income request:
-
-```bash
-curl -X POST http://127.0.0.1:8000/agent/query \
-  -H 'Authorization: Bearer <hr-analytics-agent-key>' \
-  -H 'Content-Type: application/json' \
-  -d '{"agent_id":"hr_analytics_agent","query":"Show monthly income of employee 1001"}'
-```
-
-Inspect governance state:
-
-```bash
-curl http://127.0.0.1:8000/audit-log
-curl http://127.0.0.1:8000/approvals
-```
-
-Generate a compliance report for the last 24 hours and download its PDF:
-
-```bash
-curl 'http://127.0.0.1:8000/compliance/report?hours=24'
-curl -o agenate-compliance-report.pdf 'http://127.0.0.1:8000/compliance/report/pdf?hours=24'
-```
-
-Run the narrated demo against the running server:
-
-```bash
-cd "/Users/aniketsingh/Documents/local/Indomitable X"
-python3 backend/demo_agents.py
-```
-
-## Hackathon Criteria
-
-### Technical Complexity — 35%
-
-Agenate combines natural-language interpretation, structured query handling, role-based authorization, sensitive-column controls, aggregate-only restrictions, risk scoring, SQL execution, redaction, auditability, and a human approval path in one request lifecycle.
-
-### Innovation — 25%
-
-The project treats the model as an untrusted query planner rather than an implicitly trusted database user. Every request passes through an inspectable policy boundary, with a local fallback that keeps the governance layer operational without an API key.
-
-### Functionality — 25%
-
-The working API supports agent discovery, query execution, denial, audit history, pending approvals, reviewer decisions, SQLite data, and six scripted demo scenarios. The frontend makes the entire decision stream visible in real time.
-
-### UI/UX — 15%
-
-The dashboard is a direct-open security console rather than a generic admin screen: agent identities, risk bars, color-coded outcomes, live telemetry, and approval actions are arranged around the core governance workflow.
-
-## Project Files
-
-```text
-agenate/
-├── backend/
-│   ├── db.py                  Database engine, schema discovery, and optional seed data
-│   ├── policy_engine.py       Agent roles and risk evaluation
-│   ├── llm.py                 Natural-language query interpretation
-│   ├── main.py                FastAPI application
-│   ├── guardian_agent.py      Autonomous behavioral monitoring
-│   ├── compliance_agent.py    Human-readable reports and PDF export
-│   ├── policies.yaml           Configurable agent/table policies
-│   ├── demo_agents.py         Narrated hr_records API demo runner
-│   ├── tests/
-│   │   ├── test_policy.py     Policy smoke tests
-│   │   └── test_llm.py        Parser smoke tests
-│   ├── scripts/
-│   │   └── load_hr_dataset.py CSV loader
-│   └── requirements.txt       Pinned Python dependencies
-├── frontend/
-│   └── index.html              Build-free governance dashboard
-├── README.md
-└── .gitignore
-```
+Add the project's chosen license here before public distribution.
